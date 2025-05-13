@@ -124,7 +124,17 @@ int GgApp::main(int argc, const char* const* argv)
     // 時刻 t にもとづく回転アニメーション
     GLfloat mr[16];                   // 回転の変換行列
     // 【宿題】ここを解答してください（下の loadIdentity() を置き換えてください）
-    loadIdentity(mr);
+    
+    // 始点と終点の回転（四元数）
+    float q0[4], q1[4], q[4];
+    axisAngleToQuaternion(q0, 1.0f, 0.0f, 0.0f, 1.0f);  // x軸に1ラジアン
+    axisAngleToQuaternion(q1, 0.0f, 0.0f, 1.0f, 2.0f);  // z軸に2ラジアン
+  
+    // 球面線形補間
+    slerp(q, q0, q1, t);
+
+    // 四元数から回転行列へ変換
+    quaternionToMatrix(mr, q);
 
     // 時刻 t にもとづく平行移動アニメーション
     float location[3];                // 現在位置
