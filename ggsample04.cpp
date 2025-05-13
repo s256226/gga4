@@ -124,7 +124,73 @@ int GgApp::main(int argc, const char* const* argv)
     // 時刻 t にもとづく回転アニメーション
     GLfloat mr[16];                   // 回転の変換行列
     // 【宿題】ここを解答してください（下の loadIdentity() を置き換えてください）
-    
+
+    // 軸と角度から単位四元数を生成
+    void axisAngleToQuaternion(float q[4], float x, float y, float z, float angle) {
+      float half = angle * 0.5f;
+      float s = sinf(half);
+      float len = sqrtf(x*x + y*y + z*z);
+      if (len > 0.0f) {
+        x /= len; y /= len; z /= len;
+      }
+      q[0] = cosf(half);       // w
+      q[1] = s * x;            // x
+      q[2] = s * y;            // y
+      q[3] = s * z;            // z
+    }
+
+    // SLERP（球面線形補間）
+    void slerp(float r[4], const float a[4], const float b[4], float t) {
+      float dot = a[0]*b[0] + a[1]*b[1] + a[2]*b[2] + a[3]*b[3];
+
+      float b_[4];
+      if (dot < 0.0f) {
+        dot = -dot;
+        for (int i = 0; i < 4; ++i) b_[i] = -b[i];
+      } else {
+        for (int i = 0; i < 4; ++i) b_[i] = b[i];
+      }
+
+      if (dot > 0.9995f) {
+        // 線形補間
+        for (int i = 0; i < 4; ++i) r[i] = a[i] + t * (b_[i] - a[i]);
+      } else {
+        float theta = acosf(dot);
+        float sinTheta = sinf(theta);
+        float wa = sinf((1.0f - t) * theta) / sinTheta;
+        float wb = sinf(t * theta) / sinTheta;
+        for (int i = 0; i < 4; ++i) 
+          r[i] = wa * a[i] + wb * b_[i];
+      }
+
+      // 正規化
+      float len = sqrtf(r[0]*r[0] + r[1]*r[1] + r[2]*r[2] + r[3]*r[3]);
+      for (int i = 0; i < 4; ++i) r[i] /= len;
+    }
+
+    // 四元数から回転行列へ変換
+    void quaternionToMatrix(float m[16], const float q[4]) {
+      float w = q[0], x = q[1], y = q[2], z = q[3];
+
+      m[ 0] = 1 - 2 * (y*y + z*z);
+      m[ 1] =     2 * (x*y - z*w);
+      m[ 2] =     2 * (x*z + y*w);
+      m[ 3] = 0.0f;
+
+      m[ 4] =     2 * (x*y + z*w);
+      m[ 5] = 1 - 2 * (x*x + z*z);
+      m[ 6] =     2 * (y*z - x*w);
+      m[ 7] = 0.0f;
+
+      m[ 8] =     2 * (x*z - y*w);
+      m[ 9] =     2 * (y*z + x*w);
+      m[10] = 1 - 2 * (x*x + y*y);
+      m[11] = 0.0f;
+
+      m[12] = m[13] = m[14] = 0.0f;
+      m[15] = 1.0f;
+    }
+
     // 始点と終点の回転（四元数）
     float q0[4], q1[4], q[4];
     axisAngleToQuaternion(q0, 1.0f, 0.0f, 0.0f, 1.0f);  // x軸に1ラジアン
