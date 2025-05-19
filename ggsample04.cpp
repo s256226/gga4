@@ -1,4 +1,4 @@
-﻿//
+//
 // ゲームグラフィックス特論宿題アプリケーション
 //
 #include "GgApp.h"
@@ -23,223 +23,215 @@
 // アニメーションの周期（秒）
 constexpr auto cycle{ 5.0 };
 
-// 軸と角度から単位四元数を生成
-    void axisAngleToQuaternion(float q[4], float x, float y, float z, float angle) {
-      float half = angle * 0.5f;
-      float s = sinf(half);
-      float len = sqrtf(x*x + y*y + z*z);
-      if (len > 0.0f) {
-        x /= len; y /= len; z /= len;
-      }
-      q[0] = cosf(half);       // w
-      q[1] = s * x;            // x
-      q[2] = s * y;            // y
-      q[3] = s * z;            // z
+void qmake(float* q, float x, float y, float z, float a) {
+    const auto l = x * x + y * y + z * z;
+    if (l > 0.0f) {
+        const auto s = sin(a *= 0.5f) / sqrt(l);
+        q[0] = x * s;
+        q[1] = y * s;
+        q[2] = z * s;
+        q[3] = cos(a);
     }
+}
 
-    // SLERP（球面線形補間）
-    void slerp(float r[4], const float a[4], const float b[4], float t) {
-      float dot = a[0]*b[0] + a[1]*b[1] + a[2]*b[2] + a[3]*b[3];
+void slerp(float* p, const float* q, const float* r, float t) {
+    const auto qr = q[0] * r[0] + q[1] * r[1] + q[2] * r[2] + q[3] * r[3];
+    const auto ss = 1.0f - qr * qr;
 
-      float b_[4];
-      if (dot < 0.0f) {
-        dot = -dot;
-        for (int i = 0; i < 4; ++i) b_[i] = -b[i];
-      } else {
-        for (int i = 0; i < 4; ++i) b_[i] = b[i];
-      }
-
-      if (dot > 0.9995f) {
-        // 線形補間
-        for (int i = 0; i < 4; ++i) r[i] = a[i] + t * (b_[i] - a[i]);
-      } else {
-        float theta = acosf(dot);
-        float sinTheta = sinf(theta);
-        float wa = sinf((1.0f - t) * theta) / sinTheta;
-        float wb = sinf(t * theta) / sinTheta;
-        for (int i = 0; i < 4; ++i) 
-          r[i] = wa * a[i] + wb * b_[i];
-      }
-
-      // 正規化
-      float len = sqrtf(r[0]*r[0] + r[1]*r[1] + r[2]*r[2] + r[3]*r[3]);
-      for (int i = 0; i < 4; ++i) r[i] /= len;
+    if (ss == 0.0f) {
+        p[0] = q[0]; p[1] = q[1]; p[2] = q[2]; p[3] = q[3];
     }
-
-    // 四元数から回転行列へ変換
-    void quaternionToMatrix(float m[16], const float q[4]) {
-      float w = q[0], x = q[1], y = q[2], z = q[3];
-
-      m[ 0] = 1 - 2 * (y*y + z*z);
-      m[ 1] =     2 * (x*y - z*w);
-      m[ 2] =     2 * (x*z + y*w);
-      m[ 3] = 0.0f;
-
-      m[ 4] =     2 * (x*y + z*w);
-      m[ 5] = 1 - 2 * (x*x + z*z);
-      m[ 6] =     2 * (y*z - x*w);
-      m[ 7] = 0.0f;
-
-      m[ 8] =     2 * (x*z - y*w);
-      m[ 9] =     2 * (y*z + x*w);
-      m[10] = 1 - 2 * (x*x + y*y);
-      m[11] = 0.0f;
-
-      m[12] = m[13] = m[14] = 0.0f;
-      m[15] = 1.0f;
+    else {
+        const auto sp = sqrtf(ss);
+        const auto ph = acosf(qr);
+        const auto pt = ph * t;
+        const auto t1 = sinf(pt) / sp;
+        const auto t0 = sinf(ph - pt) / sp;
+        p[0] = q[0] * t0 + r[0] * t1;
+        p[1] = q[1] * t0 + r[1] * t1;
+        p[2] = q[2] * t0 + r[2] * t1;
+        p[3] = q[3] * t0 + r[3] * t1;
     }
+}
+
+void qrot(float* m, const float* q) {
+    const auto xx = q[0] * q[0] * 2.0f;
+    const auto yy = q[1] * q[1] * 2.0f;
+    const auto zz = q[2] * q[2] * 2.0f;
+    const auto xy = q[0] * q[1] * 2.0f;
+    const auto yz = q[1] * q[2] * 2.0f;
+    const auto zx = q[2] * q[0] * 2.0f;
+    const auto xw = q[0] * q[3] * 2.0f;
+    const auto yw = q[1] * q[3] * 2.0f;
+    const auto zw = q[2] * q[3] * 2.0f;
+
+    m[0] = 1.0f - yy - zz;
+    m[1] = xy + zw;
+    m[2] = zx - yw;
+    m[3] = 0.0f;
+
+    m[4] = xy - zw;
+    m[5] = 1.0f - zz - xx;
+    m[6] = yz + xw;
+    m[7] = 0.0f;
+
+    m[8] = zx + yw;
+    m[9] = yz - xw;
+    m[10] = 1.0f - xx - yy;
+    m[11] = 0.0f;
+
+    m[12] = m[13] = m[14] = 0.0f;
+    m[15] = 1.0f;
+}
+
 
 //
 // アプリケーション本体
 //
 int GgApp::main(int argc, const char* const* argv)
 {
-  // ウィンドウを作成する (この行は変更しないでください)
-  Window window{ argc > 1 ? argv[1] : PROJECT_NAME };
+    // ウィンドウを作成する (この行は変更しないでください)
+    Window window{ argc > 1 ? argv[1] : PROJECT_NAME };
 
-  // 背景色を指定する
-  glClearColor(1.0f, 1.0f, 1.0f, 0.0f);
+    // 背景色を指定する
+    glClearColor(1.0f, 1.0f, 1.0f, 0.0f);
 
-  // プログラムオブジェクトの作成
-  const auto program{ loadProgram(PROJECT_NAME ".vert", "pv", PROJECT_NAME ".frag", "fc") };
+    // プログラムオブジェクトの作成
+    const auto program{ loadProgram(PROJECT_NAME ".vert", "pv", PROJECT_NAME ".frag", "fc") };
 
-  // uniform 変数のインデックスの検索（見つからなければ -1）
-  const auto mcLoc{ glGetUniformLocation(program, "mc") };
+    // uniform 変数のインデックスの検索（見つからなければ -1）
+    const auto mcLoc{ glGetUniformLocation(program, "mc") };
 
-  // ビュー変換行列を mv に求める
-  GLfloat mv[16];
-  lookat(mv, 3.0f, 4.0f, 5.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f);
+    // ビュー変換行列を mv に求める
+    GLfloat mv[16];
+    lookat(mv, 3.0f, 4.0f, 5.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f);
 
-  // 頂点属性
-  static const GLfloat position[][3]
-  {
-    { -0.9f, -0.9f, -0.9f },  // (0)
-    {  0.9f, -0.9f, -0.9f },  // (1)
-    {  0.9f, -0.9f,  0.9f },  // (2)
-    { -0.9f, -0.9f,  0.9f },  // (3)
-    { -0.9f,  0.9f, -0.9f },  // (4)
-    {  0.9f,  0.9f, -0.9f },  // (5)
-    {  0.9f,  0.9f,  0.9f },  // (6)
-    { -0.9f,  0.9f,  0.9f },  // (7)
-  };
+    // 頂点属性
+    static const GLfloat position[][3]
+    {
+      { -0.9f, -0.9f, -0.9f },  // (0)
+      {  0.9f, -0.9f, -0.9f },  // (1)
+      {  0.9f, -0.9f,  0.9f },  // (2)
+      { -0.9f, -0.9f,  0.9f },  // (3)
+      { -0.9f,  0.9f, -0.9f },  // (4)
+      {  0.9f,  0.9f, -0.9f },  // (5)
+      {  0.9f,  0.9f,  0.9f },  // (6)
+      { -0.9f,  0.9f,  0.9f },  // (7)
+    };
 
-  // 頂点数
-  constexpr auto vertices{ static_cast<GLuint>(std::size(position)) };
+    // 頂点数
+    constexpr auto vertices{ static_cast<GLuint>(std::size(position)) };
 
-  // 頂点インデックス
-  static const GLuint index[]
-  {
-    0, 1,
-    1, 2,
-    2, 3,
-    3, 0,
-    0, 4,
-    1, 5,
-    2, 6,
-    3, 7,
-    4, 5,
-    5, 6,
-    6, 7,
-    7, 4,
-  };
+    // 頂点インデックス
+    static const GLuint index[]
+    {
+      0, 1,
+      1, 2,
+      2, 3,
+      3, 0,
+      0, 4,
+      1, 5,
+      2, 6,
+      3, 7,
+      4, 5,
+      5, 6,
+      6, 7,
+      7, 4,
+    };
 
-  // 稜線数
-  constexpr auto lines{ static_cast<GLuint>(std::size(index)) };
+    // 稜線数
+    constexpr auto lines{ static_cast<GLuint>(std::size(index)) };
 
-  // 頂点配列オブジェクトの作成
-  const auto vao{ createObject(vertices, position, lines, index) };
+    // 頂点配列オブジェクトの作成
+    const auto vao{ createObject(vertices, position, lines, index) };
 
-  // 平行移動の経路
-  static const float route[][3]
-  {
-    { -2.0f, -1.0f, -3.0f },
-    {  0.0f, -2.0f, -2.0f },
-    { -1.0f, -1.0f, -1.0f },
-    { -0.5f, -0.5f, -0.5f },
-    {  0.0f,  0.0f,  0.0f },
-  };
+    // 平行移動の経路
+    static const float route[][3]
+    {
+      { -2.0f, -1.0f, -3.0f },
+      {  0.0f, -2.0f, -2.0f },
+      { -1.0f, -1.0f, -1.0f },
+      { -0.5f, -0.5f, -0.5f },
+      {  0.0f,  0.0f,  0.0f },
+    };
 
-  // 通過時間 (× cycle)
-  static const float transit[]
-  {
-    0.0f,
-    0.3f,
-    0.5f,
-    0.7f,
-    1.0f,
-  };
+    // 通過時間 (× cycle)
+    static const float transit[]
+    {
+      0.0f,
+      0.3f,
+      0.5f,
+      0.7f,
+      1.0f,
+    };
 
-  // 通過地点の数
-  constexpr auto points{ static_cast<int>(std::size(transit)) };
+    // 通過地点の数
+    constexpr auto points{ static_cast<int>(std::size(transit)) };
 
-  // 経過時間のリセット
-  glfwSetTime(0.0);
+    // 経過時間のリセット
+    glfwSetTime(0.0);
 
-  // ウィンドウが開いている間繰り返す
-  while (window)
-  {
-    // ウィンドウを消去する
-    glClear(GL_COLOR_BUFFER_BIT);
+    // ウィンドウが開いている間繰り返す
+    while (window)
+    {
+        // ウィンドウを消去する
+        glClear(GL_COLOR_BUFFER_BIT);
 
-    // シェーダプログラムの使用開始
-    glUseProgram(program);
+        // シェーダプログラムの使用開始
+        glUseProgram(program);
 
-    // 時刻の計測
-    const auto t{ static_cast<float>(fmod(glfwGetTime(), cycle) / cycle) };
+        // 時刻の計測
+        const auto t{ static_cast<float>(fmod(glfwGetTime(), cycle) / cycle) };
 
-    // 時刻 t にもとづく回転アニメーション
-    GLfloat mr[16];                   // 回転の変換行列
-    // 【宿題】ここを解答してください（下の loadIdentity() を置き換えてください）
+        // 時刻 t にもとづく回転アニメーション
+        GLfloat mr[16];                   // 回転の変換行列
+        // 【宿題】ここを解答してください（下の loadIdentity() を置き換えてください）
+        float q0[4], q1[4], q[4];
 
-    
+        qmake(q0, 1.0f, 0.0f, 0.0f, 1.0f);
 
-    // 始点と終点の回転（四元数）
-    float q0[4], q1[4], q[4];
-    axisAngleToQuaternion(q0, 1.0f, 0.0f, 0.0f, 1.0f);  // x軸に1ラジアン
-    axisAngleToQuaternion(q1, 0.0f, 0.0f, 1.0f, 2.0f);  // z軸に2ラジアン
-  
-    // 球面線形補間
-    slerp(q, q0, q1, t);
+        qmake(q1, 0.0f, 0.0f, 1.0f, 2.0f);
 
-    // 四元数から回転行列へ変換
-    quaternionToMatrix(mr, q);
+        slerp(q, q0, q1, t);
 
-    // 時刻 t にもとづく平行移動アニメーション
-    float location[3];                // 現在位置
-    spline(location, route, transit, points, t);
-    GLfloat mt[16];                   // 平行移動の変換行列
-    translate(mt, location[0], location[1], location[2]);
+        qrot(mr, q);
 
-    // モデル変換行列を mm に求め，
-    // それとビュー変換行列 mv の積をモデルビュー変換行列 mw に求める
-    GLfloat mm[16], mw[16];
-    multiply(mm, mt, mr);             // モデル変換 mm ← 移動 mt × 回転 mr
-    multiply(mw, mv, mm);             // モデルビュー変換 mw ← ビュー変換 mv × モデル変換 mm
+        // 時刻 t にもとづく平行移動アニメーション
+        float location[3];                // 現在位置
+        spline(location, route, transit, points, t);
+        GLfloat mt[16];                   // 平行移動の変換行列
+        translate(mt, location[0], location[1], location[2]);
 
-    // 透視投影変換行列を mp に求め，
-    // それとモデルビュー変換行列 mw の積をクリッピング座標系への変換行列 mc に求める
-    GLfloat mp[16], mc[16];
-    perspective(mp, 0.5f, window.getAspect(), 1.0f, 15.0f);
-    multiply(mc, mp, mw);             // クリッピング座標系への変換行列 mc ← 投影変換 mp × モデルビュー変換 mw
+        // モデル変換行列を mm に求め，
+        // それとビュー変換行列 mv の積をモデルビュー変換行列 mw に求める
+        GLfloat mm[16], mw[16];
+        multiply(mm, mt, mr);             // モデル変換 mm ← 移動 mt × 回転 mr
+        multiply(mw, mv, mm);             // モデルビュー変換 mw ← ビュー変換 mv × モデル変換 mm
 
-    // uniform 変数 mc に変換行列 mc を設定する
-    glUniformMatrix4fv(mcLoc, 1, GL_FALSE, mc);
+        // 透視投影変換行列を mp に求め，
+        // それとモデルビュー変換行列 mw の積をクリッピング座標系への変換行列 mc に求める
+        GLfloat mp[16], mc[16];
+        perspective(mp, 0.5f, window.getAspect(), 1.0f, 15.0f);
+        multiply(mc, mp, mw);             // クリッピング座標系への変換行列 mc ← 投影変換 mp × モデルビュー変換 mw
 
-    // 描画に使う頂点配列オブジェクトの指定
-    glBindVertexArray(vao);
+        // uniform 変数 mc に変換行列 mc を設定する
+        glUniformMatrix4fv(mcLoc, 1, GL_FALSE, mc);
 
-    // 図形の描画
-    glDrawElements(GL_LINES, lines, GL_UNSIGNED_INT, 0);
+        // 描画に使う頂点配列オブジェクトの指定
+        glBindVertexArray(vao);
 
-    // 頂点配列オブジェクトの指定解除
-    glBindVertexArray(0);
+        // 図形の描画
+        glDrawElements(GL_LINES, lines, GL_UNSIGNED_INT, 0);
 
-    // シェーダプログラムの使用終了
-    glUseProgram(0);
+        // 頂点配列オブジェクトの指定解除
+        glBindVertexArray(0);
 
-    // カラーバッファを入れ替えてイベントを取り出す
-    window.swapBuffers();
-  }
+        // シェーダプログラムの使用終了
+        glUseProgram(0);
 
-  return 0;
+        // カラーバッファを入れ替えてイベントを取り出す
+        window.swapBuffers();
+    }
+
+    return 0;
 }
