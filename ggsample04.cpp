@@ -52,6 +52,10 @@ void slerp(float* p, const float* q, const float* r, float t) {
         p[2] = q[2] * t0 + r[2] * t1;
         p[3] = q[3] * t0 + r[3] * t1;
     }
+  float len = sqrtf(q[0]*q[0] + q[1]*q[1] + q[2]*q[2] + q[3]*q[3]);
+if (len > 0.0f) {
+  for (int i = 0; i < 4; ++i) q[i] /= len;
+}
 }
 
 void qrot(float* m, const float* q) {
