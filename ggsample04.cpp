@@ -206,7 +206,7 @@ int GgApp::main(int argc, const char* const* argv)
         // モデル変換行列を mm に求め，
         // それとビュー変換行列 mv の積をモデルビュー変換行列 mw に求める
         GLfloat mm[16], mw[16];
-        multiply(mm, mr, mt);             // モデル変換 mm ← 移動 mt × 回転 mr
+        multiply(mm, mt, mr);             // モデル変換 mm ← 移動 mt × 回転 mr
         multiply(mw, mv, mm);             // モデルビュー変換 mw ← ビュー変換 mv × モデル変換 mm
 
         // 透視投影変換行列を mp に求め，
