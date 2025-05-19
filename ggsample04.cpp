@@ -195,12 +195,6 @@ int GgApp::main(int argc, const char* const* argv)
 
         slerp(q, q0, q1, t);
 
-      　float len = sqrtf(q[0]*q[0] + q[1]*q[1] + q[2]*q[2] + q[3]*q[3]);
-　　　　  if (len > 0.0f) {
-          for (int i = 0; i < 4; ++i) q[i] /= len;
-        }
-
-
         qrot(mr, q);
 
         // 時刻 t にもとづく平行移動アニメーション
